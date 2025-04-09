@@ -1,0 +1,448 @@
+<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C411 COUNTRY Biodiversity Tracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+        
+        @media (min-width: 1024px) {
+            #map {
+                height: 500px;
+            }
+        }
+        
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            border-radius: 0.5rem;
+        }
+        
+        .dark .custom-popup .leaflet-popup-content-wrapper {
+            background: rgba(30, 30, 30, 0.9);
+            color: #f3f4f6;
+        }
+        
+        .dark .leaflet-container {
+            background-color: #4B5563;
+        }
+        
+        .thumbnail {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        .sighting-image {
+            max-height: 200px;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <h1 class="text-3xl font-bold text-center mb-4 text-primary">C411 COUNTRY Biodiversity Tracker</h1>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Form Section -->
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Add New Sighting</h2>
+                
+                <form id="sightingForm" class="space-y-4">
+                    <div>
+                        <label class="block mb-1">Type</label>
+                        <div class="flex space-x-4">
+                            <button type="button" id="animalTypeBtn" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded flex-1 active">Animal</button>
+                            <button type="button" id="plantTypeBtn" class="bg-gray-300 hover:bg-green-600 text-gray-700 hover:text-white py-2 px-4 rounded flex-1">Plant</button>
+                            <input type="hidden" id="sightingType" name="type" value="animal">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="name" class="block mb-1">Name</label>
+                        <input type="text" id="name" required="" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-base">
+                    </div>
+                    
+                    <div>
+                        <label for="datetime" class="block mb-1">Date &amp; Time</label>
+                        <input type="datetime-local" id="datetime" required="" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-base">
+                    </div>
+                    
+                    <div>
+                        <label for="notes" class="block mb-1">Notes (Optional)</label>
+                        <textarea id="notes" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-base"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label for="image" class="block mb-1">Image</label>
+                        <input type="file" id="image" accept="image/*" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-base">
+                        <div id="imagePreview" class="mt-2 hidden">
+                            <img src="#" alt="Preview" class="max-w-full max-h-40 rounded">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block mb-1">Location</label>
+                        <p class="text-sm mb-2">Current selection: <span id="selectedLocation">None selected</span></p>
+                        <button type="button" id="useCurrentLocation" class="bg-primary hover:bg-opacity-80 text-white py-1 px-3 rounded text-sm">Use My Location</button>
+                        <p class="text-sm mt-2">Or click on the map to select location</p>
+                    </div>
+                    
+                    <button type="submit" class="bg-primary hover:bg-opacity-80 text-white py-2 px-4 rounded w-full">Add Sighting</button>
+                </form>
+            </div>
+            
+            <!-- Map Section -->
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md lg:col-span-2">
+                <h2 class="text-xl font-semibold mb-4">Map</h2>
+                <div id="map" class="rounded-lg shadow"></div>
+                
+                <div class="mt-4">
+                    <h3 class="text-lg font-medium mb-2">Recent Sightings</h3>
+                    <div id="sightingsList" class="space-y-2 max-h-60 overflow-y-auto">
+                        <p class="text-gray-500 dark:text-gray-400 italic">No sightings yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dark mode detection and handling
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+        
+        // Initialize variables
+        let map, marker;
+        const sightings = [];
+        let selectedLatLng = null;
+        
+        // Initialize map
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set current date and time as default
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('datetime').value = now.toISOString().slice(0, 16);
+            
+            // Initialize the map centered on Gembrook, Victoria, Australia
+            map = L.map('map').setView([-37.9537, 145.5393], 13);
+            
+            // Base satellite imagery layer
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }).addTo(map);
+            
+            // Add roads and place names overlay
+            const roadsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                opacity: 0.7,
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri'
+            }).addTo(map);
+            
+            const labelsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                opacity: 0.8,
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri'
+            }).addTo(map);
+            
+            // Handle map clicks to set location
+            map.on('click', function(e) {
+                setMarkerPosition(e.latlng);
+            });
+            
+            // Handle "Use My Location" button
+            document.getElementById('useCurrentLocation').addEventListener('click', getUserLocation);
+            
+            // Handle form submission
+            document.getElementById('sightingForm').addEventListener('submit', addSighting);
+            
+            // Handle image preview
+            document.getElementById('image').addEventListener('change', previewImage);
+            
+            // Handle type selection buttons
+            const animalBtn = document.getElementById('animalTypeBtn');
+            const plantBtn = document.getElementById('plantTypeBtn');
+            const typeInput = document.getElementById('sightingType');
+            
+            animalBtn.addEventListener('click', () => {
+                animalBtn.className = 'bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded flex-1';
+                plantBtn.className = 'bg-gray-300 hover:bg-green-600 text-gray-700 hover:text-white py-2 px-4 rounded flex-1';
+                typeInput.value = 'animal';
+                updateTemporaryMarker();
+            });
+            
+            plantBtn.addEventListener('click', () => {
+                plantBtn.className = 'bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded flex-1';
+                animalBtn.className = 'bg-gray-300 hover:bg-red-600 text-gray-700 hover:text-white py-2 px-4 rounded flex-1';
+                typeInput.value = 'plant';
+                updateTemporaryMarker();
+            });
+        });
+        
+        // Preview the selected image
+        function previewImage(e) {
+            const preview = document.getElementById('imagePreview');
+            const previewImg = preview.querySelector('img');
+            const file = e.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    preview.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            } else {
+                preview.classList.add('hidden');
+            }
+        }
+        
+        // Get user's current location
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                const button = document.getElementById('useCurrentLocation');
+                button.textContent = 'Getting location...';
+                button.disabled = true;
+                
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const latlng = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        setMarkerPosition(latlng);
+                        map.setView(latlng, 15);
+                        
+                        button.textContent = 'Use My Location';
+                        button.disabled = false;
+                    },
+                    error => {
+                        console.error('Error getting location:', error);
+                        alert('Unable to retrieve your location. Please click on the map instead.');
+                        
+                        button.textContent = 'Use My Location';
+                        button.disabled = false;
+                    }
+                );
+            } else {
+                alert('Geolocation is not supported by your browser. Please click on the map to select a location.');
+            }
+        }
+        
+        // Set marker position on the map
+        function setMarkerPosition(latlng) {
+            selectedLatLng = latlng;
+            
+            // Update text display
+            document.getElementById('selectedLocation').textContent = 
+                `Latitude: ${latlng.lat.toFixed(6)}, Longitude: ${latlng.lng.toFixed(6)}`;
+            
+            // Add or move marker with current type color
+            updateTemporaryMarker();
+        }
+        
+        // Update temporary marker based on current type selection
+        function updateTemporaryMarker() {
+            if (!selectedLatLng) return;
+            
+            const type = document.getElementById('sightingType').value;
+            const markerColor = type === 'animal' ? '#ef4444' : '#10b981'; // red for animal, green for plant
+            
+            const customIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color: ${markerColor}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+            
+            // Remove old marker if it exists
+            if (marker) {
+                map.removeLayer(marker);
+            }
+            
+            // Add new marker with appropriate color
+            marker = L.marker(selectedLatLng, {
+                icon: customIcon
+            }).addTo(map);
+        }
+        
+        // Add a new sighting
+        function addSighting(e) {
+            e.preventDefault();
+            
+            if (!selectedLatLng) {
+                alert('Please select a location on the map.');
+                return;
+            }
+            
+            // Get the type from the hidden input
+            const type = document.getElementById('sightingType').value;
+            
+            const name = document.getElementById('name').value;
+            const datetime = document.getElementById('datetime').value;
+            const notes = document.getElementById('notes').value;
+            const imageInput = document.getElementById('image');
+            
+            // Create the sighting object
+            const sighting = {
+                id: Date.now().toString(),
+                type,
+                name,
+                datetime,
+                notes,
+                location: {
+                    lat: selectedLatLng.lat,
+                    lng: selectedLatLng.lng
+                },
+                imageUrl: null
+            };
+            
+            // Process image if one was selected
+            if (imageInput.files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    sighting.imageUrl = e.target.result;
+                    finalizeSighting(sighting);
+                };
+                reader.readAsDataURL(imageInput.files[0]);
+            } else {
+                finalizeSighting(sighting);
+            }
+        }
+        
+        // Save and display the new sighting
+        function finalizeSighting(sighting) {
+            // Add to our array
+            sightings.push(sighting);
+            
+            const popupContent = `
+                <div>
+                    <strong>${sighting.name}</strong> (${sighting.type})<br>
+                    ${new Date(sighting.datetime).toLocaleString()}<br>
+                    ${sighting.notes ? `<p>${sighting.notes}</p>` : ''}
+                    ${sighting.imageUrl ? `<img src="${sighting.imageUrl}" class="sighting-image mt-2" alt="${sighting.name}">` : ''}
+                </div>
+            `;
+            
+            const markerColor = sighting.type === 'animal' ? '#ef4444' : '#10b981'; // red for animal, green for plant
+            const customIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color: ${markerColor}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+            
+            L.marker([sighting.location.lat, sighting.location.lng], {
+                icon: customIcon
+            })
+            .bindPopup(popupContent, {className: 'custom-popup'})
+            .addTo(map);
+            
+            // Update the sightings list
+            updateSightingsList();
+            
+            // Reset the form
+            document.getElementById('sightingForm').reset();
+            document.getElementById('imagePreview').classList.add('hidden');
+            document.getElementById('selectedLocation').textContent = 'None selected';
+            
+            // Reset datetime to current time
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('datetime').value = now.toISOString().slice(0, 16);
+            
+            // Remove temporary marker
+            if (marker) {
+                map.removeLayer(marker);
+                marker = null;
+            }
+            
+            selectedLatLng = null;
+            
+            // Alert confirmation
+            alert('Sighting added successfully!');
+        }
+        
+        // Update the list of sightings
+        function updateSightingsList() {
+            const listContainer = document.getElementById('sightingsList');
+            
+            if (sightings.length === 0) {
+                listContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400 italic">No sightings yet.</p>';
+                return;
+            }
+            
+            // Sort by most recent first
+            const sortedSightings = [...sightings].sort((a, b) => 
+                new Date(b.datetime) - new Date(a.datetime)
+            );
+            
+            listContainer.innerHTML = '';
+            
+            sortedSightings.forEach(sighting => {
+                const sightingEl = document.createElement('div');
+                sightingEl.className = 'flex items-center p-2 border dark:border-gray-700 rounded';
+                
+                const iconColor = sighting.type === 'animal' ? 'bg-red-500' : 'bg-green-500';
+                
+                sightingEl.innerHTML = `
+                    <div class="${iconColor} w-3 h-3 rounded-full mr-2"></div>
+                    <div class="flex-1">
+                        <div class="font-medium">${sighting.name}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            ${new Date(sighting.datetime).toLocaleString()}
+                        </div>
+                    </div>
+                    ${sighting.imageUrl ? 
+                    `<img src="${sighting.imageUrl}" class="thumbnail ml-2" alt="${sighting.name}">` : 
+                    ''}
+                `;
+                
+                // Add click event to fly to the marker
+                sightingEl.addEventListener('click', () => {
+                    map.flyTo([sighting.location.lat, sighting.location.lng], 15);
+                });
+                
+                listContainer.appendChild(sightingEl);
+            });
+        }
+    </script>
+
+
+</body></html>
